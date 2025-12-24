@@ -1,17 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { THEME_KEY, DEFAULT_THEME } from '../constants';
 
-const THEME_KEY = 'simplechat-theme';
-const DEFAULT_THEME = 'light';
-
-/**
- * 主题管理 Hook
- * @returns {Object} 主题相关状态和方法
- */
 export function useTheme() {
   const [theme, setTheme] = useState(() => {
     try {
-      const saved = localStorage.getItem(THEME_KEY);
-      return saved || DEFAULT_THEME;
+      return localStorage.getItem(THEME_KEY) || DEFAULT_THEME;
     } catch {
       return DEFAULT_THEME;
     }
@@ -30,6 +23,6 @@ export function useTheme() {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   }, []);
 
-  return { theme, setTheme, toggleTheme };
+  return { theme, toggleTheme };
 }
 

@@ -1,23 +1,7 @@
-import { useMemo } from 'react';
+import { isMobile } from '../utils/device';
 
-const MOBILE_BREAKPOINT = 768;
-
-/**
- * 聊天输入组件
- * @param {Object} props
- * @param {string} props.value - 输入框的值
- * @param {Function} props.onChange - 值变化回调
- * @param {Function} props.onSend - 发送回调
- * @param {boolean} props.disabled - 是否禁用
- * @param {boolean} props.loading - 是否加载中
- */
-function ChatInput({ value, onChange, onSend, disabled, loading }) {
-  const isMobile = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < MOBILE_BREAKPOINT;
-  }, []);
-  
-  const placeholder = isMobile 
+export default function ChatInput({ value, onChange, onSend, disabled, loading }) {
+  const placeholder = isMobile() 
     ? '输入消息...' 
     : '输入消息... (按 Enter 发送，Shift+Enter 换行)';
 
@@ -68,6 +52,4 @@ function ChatInput({ value, onChange, onSend, disabled, loading }) {
     </div>
   );
 }
-
-export default ChatInput;
 

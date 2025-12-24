@@ -2,11 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { THEME_KEY, DEFAULT_THEME } from './constants';
 
-const THEME_KEY = 'simplechat-theme';
-const DEFAULT_THEME = 'dark';
-
-// 初始化主题
 try {
   const savedTheme = localStorage.getItem(THEME_KEY) || DEFAULT_THEME;
   document.documentElement.setAttribute('data-theme', savedTheme);

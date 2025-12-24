@@ -1,10 +1,5 @@
 import { memo } from 'react';
 
-/**
- * 聊天头部组件
- * @param {Object} props
- * @param {Function} props.onMenuClick - 菜单点击回调
- */
 function ChatHeader({ onMenuClick }) {
   return (
     <div className="chat-header">

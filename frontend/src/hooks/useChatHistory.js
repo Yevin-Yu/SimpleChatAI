@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-
-const CHAT_HISTORY_KEY = 'simplechat-history';
-const CURRENT_CHAT_KEY = 'simplechat-current-chat';
+import { CHAT_HISTORY_KEY, CURRENT_CHAT_KEY } from '../constants';
 
 const INITIAL_ASSISTANT_MESSAGE = {
   id: crypto.randomUUID(),
@@ -10,30 +8,23 @@ const INITIAL_ASSISTANT_MESSAGE = {
   timestamp: Date.now(),
 };
 
-/**
- * 创建初始聊天对象
- */
 function createInitialChat() {
   return {
     id: crypto.randomUUID(),
     title: '新对话',
-    messages: [INITIAL_ASSISTANT_MESSAGE],
+    messages: [{ ...INITIAL_ASSISTANT_MESSAGE, id: crypto.randomUUID(), timestamp: Date.now() }],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
 }
 
-/**
- * 聊天历史管理 Hook
- * @returns {Object} 聊天历史相关状态和方法
- */
 export function useChatHistory() {
   const [chats, setChats] = useState(() => {
     try {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY);
       if (saved) return JSON.parse(saved);
     } catch {
-      // 忽略解析错误，使用默认值
+      // 忽略解析错误
     }
     return [createInitialChat()];
   });
@@ -73,17 +64,7 @@ export function useChatHistory() {
   }, [chats, currentChatId]);
 
   const createNewChat = useCallback(() => {
-    const newChat = {
-      id: crypto.randomUUID(),
-      title: '新对话',
-      messages: [{
-        ...INITIAL_ASSISTANT_MESSAGE,
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-      }],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    const newChat = createInitialChat();
     setChats((prev) => [newChat, ...prev]);
     setCurrentChatId(newChat.id);
     return newChat;

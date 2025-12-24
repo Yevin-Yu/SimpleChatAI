@@ -1,9 +1,6 @@
 import { memo, useState, useEffect } from 'react';
 import '../styles/code-highlight.css';
 
-/**
- * Markdown 组件配置
- */
 const markdownComponents = {
   code({ node, inline, className, children, ...props }) {
     if (inline) {
@@ -19,9 +16,6 @@ const markdownComponents = {
   },
 };
 
-/**
- * Markdown 渲染器组件（懒加载）
- */
 function MarkdownRenderer({ content }) {
   const [MarkdownComponent, setMarkdownComponent] = useState(null);
 
@@ -43,18 +37,12 @@ function MarkdownRenderer({ content }) {
   }, []);
 
   if (!MarkdownComponent) {
-    return <div>加载中...</div>;
+    return null;
   }
 
   return <MarkdownComponent>{content}</MarkdownComponent>;
 }
 
-/**
- * 消息组件
- * @param {Object} props
- * @param {Object} props.message - 消息对象
- * @param {boolean} props.isTyping - 是否正在输入
- */
 function Message({ message, isTyping }) {
   const isUser = message.role === 'user';
   const isEmpty = !message.content || message.content.trim() === '';

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { sendChatMessage } from './utils/api';
 import { useTheme } from './hooks/useTheme';
 import { useChatHistory } from './hooks/useChatHistory';
+import { isMobile } from './utils/device';
 import ChatHeader from './components/ChatHeader';
 import ChatSidebar from './components/ChatSidebar';
 import Message from './components/Message';
@@ -9,11 +10,6 @@ import ChatInput from './components/ChatInput';
 import ThemeToggle from './components/ThemeToggle';
 import './App.css';
 
-const MOBILE_BREAKPOINT = 769;
-
-/**
- * 主应用组件
- */
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const {
@@ -30,26 +26,100 @@ export default function App() {
   
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    return typeof window !== 'undefined' && window.innerWidth >= MOBILE_BREAKPOINT;
-  });
+  const [messagesVisible, setMessagesVisible] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile());
   
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const prevChatIdRef = useRef(currentChatId);
   const prevMessagesLengthRef = useRef(messages.length);
   const shouldScrollRef = useRef(false);
+  const isInitialMountRef = useRef(true);
+  const justSwitchedChatRef = useRef(false);
 
-  // 切换聊天时重置滚动状态
+  const scrollToBottom = useCallback((immediate = false) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const scroll = (retryCount = 0) => {
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      
+      if (maxScroll > 0) {
+        container.scrollTop = maxScroll;
+        
+        requestAnimationFrame(() => {
+          const currentMaxScroll = container.scrollHeight - container.clientHeight;
+          const distanceFromBottom = Math.abs(container.scrollTop - currentMaxScroll);
+          
+          if (distanceFromBottom > 5 && currentMaxScroll > 0 && retryCount < 2) {
+            container.scrollTop = currentMaxScroll;
+            scroll(retryCount + 1);
+          }
+        });
+      }
+    };
+
+    if (immediate) {
+      scroll();
+    } else {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scroll();
+        });
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isInitialMountRef.current && messages.length > 0) {
+      isInitialMountRef.current = false;
+      setTimeout(() => scrollToBottom(true), 100);
+    }
+  }, [messages.length, scrollToBottom]);
+
   useEffect(() => {
     if (prevChatIdRef.current !== currentChatId) {
       prevChatIdRef.current = currentChatId;
       prevMessagesLengthRef.current = messages.length;
       shouldScrollRef.current = true;
+      justSwitchedChatRef.current = true;
+      setMessagesVisible(false);
+      
+      if (messages.length > 0) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            scrollToBottom(true);
+            requestAnimationFrame(() => {
+              setMessagesVisible(true);
+              justSwitchedChatRef.current = false;
+            });
+          });
+        });
+      } else {
+        requestAnimationFrame(() => {
+          setMessagesVisible(true);
+          justSwitchedChatRef.current = false;
+        });
+      }
+    } else if (justSwitchedChatRef.current && messages.length > 0) {
+      prevMessagesLengthRef.current = messages.length;
+      shouldScrollRef.current = true;
+      setMessagesVisible(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollToBottom(true);
+          requestAnimationFrame(() => {
+            setMessagesVisible(true);
+            justSwitchedChatRef.current = false;
+          });
+        });
+      });
     }
-  }, [currentChatId, messages.length]);
+  }, [currentChatId, messages.length, scrollToBottom]);
 
-  // 智能滚动：只在需要时滚动
   useEffect(() => {
+    if (justSwitchedChatRef.current) return;
+
     const shouldScroll = shouldScrollRef.current || 
                         messages.length > prevMessagesLengthRef.current ||
                         (loading && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant');
@@ -125,14 +195,14 @@ export default function App() {
 
   const handleNewChat = useCallback(() => {
     createNewChat();
-    if (window.innerWidth < MOBILE_BREAKPOINT) {
+    if (isMobile()) {
       setSidebarOpen(false);
     }
   }, [createNewChat]);
 
   const handleSwitchChat = useCallback((chatId) => {
     switchChat(chatId);
-    if (window.innerWidth < MOBILE_BREAKPOINT) {
+    if (isMobile()) {
       setSidebarOpen(false);
     }
   }, [switchChat]);
@@ -155,19 +225,30 @@ export default function App() {
       />
       <div className="chat-container">
         <ChatHeader onMenuClick={handleToggleSidebar} />
-        <div className="messages-container">
-          {messages.map((message, index) => {
-            const isLastMessage = index === messages.length - 1;
-            const isTypingMessage = loading && isLastMessage && message.role === 'assistant';
-            return (
-              <Message
-                key={message.id || `msg-${index}`}
-                message={message}
-                isTyping={isTypingMessage}
-              />
-            );
-          })}
-          <div ref={messagesEndRef} />
+        <div 
+          ref={messagesContainerRef}
+          className="messages-container"
+        >
+          <div 
+            className="messages-content"
+            style={{ 
+              opacity: messagesVisible ? 1 : 0,
+              transition: 'opacity 0.2s ease-in-out'
+            }}
+          >
+            {messages.map((message, index) => {
+              const isLastMessage = index === messages.length - 1;
+              const isTypingMessage = loading && isLastMessage && message.role === 'assistant';
+              return (
+                <Message
+                  key={message.id || `msg-${index}`}
+                  message={message}
+                  isTyping={isTypingMessage}
+                />
+              );
+            })}
+            <div ref={messagesEndRef} className="messages-end-spacer" />
+          </div>
         </div>
         <ChatInput
           value={input}
