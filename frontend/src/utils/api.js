@@ -1,9 +1,68 @@
 /**
+ * 获取 API 基础地址
+ * 开发环境：使用 /api（通过 Vite 代理到后端）
+ * 生产环境：使用环境变量配置的完整 URL
+ */
+function getApiBaseUrl() {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  const isDev = import.meta.env.DEV;
+  
+  if (isDev) {
+    return '/api';
+  }
+  
+  if (envUrl) {
+    if (envUrl.startsWith('http://') || envUrl.startsWith('https://')) {
+      return envUrl.endsWith('/api') || envUrl.endsWith('/api/')
+        ? envUrl.replace(/\/$/, '')
+        : `${envUrl.replace(/\/$/, '')}/api`;
+    }
+    return envUrl;
+  }
+  
+  return 'http://localhost:3001';
+}
+
+const API_BASE_URL = getApiBaseUrl();
+
+/**
+ * 解析 SSE 数据行
+ */
+function parseSSELine(line) {
+  if (!line.startsWith('data: ')) {
+    return null;
+  }
+
+  try {
+    const data = JSON.parse(line.slice(6));
+    if (data.error) {
+      return { error: data.error };
+    }
+    if (data.content) {
+      return { content: data.content };
+    }
+    if (data.done) {
+      return { done: true };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 发送聊天消息并处理流式响应
+ * @param {Array} messages - 消息数组
+ * @param {Function} onChunk - 接收数据块的回调
+ * @param {Function} onError - 错误处理回调
  */
 export async function sendChatMessage(messages, onChunk, onError) {
   try {
-    const response = await fetch('/api/chat', {
+    const apiUrl = API_BASE_URL.endsWith('/') 
+      ? `${API_BASE_URL}chat` 
+      : `${API_BASE_URL}/chat`;
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages }),
@@ -26,22 +85,16 @@ export async function sendChatMessage(messages, onChunk, onError) {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.error) {
-              onError(data.error);
-              return;
-            }
-            if (data.content) {
-              onChunk(data.content);
-            }
-            if (data.done) {
-              return;
-            }
-          } catch {
-            // 忽略解析错误
-          }
+        const parsed = parseSSELine(line);
+        if (parsed?.error) {
+          onError(parsed.error);
+          return;
+        }
+        if (parsed?.content) {
+          onChunk(parsed.content);
+        }
+        if (parsed?.done) {
+          return;
         }
       }
     }

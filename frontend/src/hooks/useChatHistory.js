@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
 const CHAT_HISTORY_KEY = 'simplechat-history';
 const CURRENT_CHAT_KEY = 'simplechat-current-chat';
@@ -10,21 +10,30 @@ const INITIAL_ASSISTANT_MESSAGE = {
   timestamp: Date.now(),
 };
 
-const createInitialChat = () => ({
-  id: crypto.randomUUID(),
-  title: '新对话',
-  messages: [INITIAL_ASSISTANT_MESSAGE],
-  createdAt: Date.now(),
-  updatedAt: Date.now(),
-});
+/**
+ * 创建初始聊天对象
+ */
+function createInitialChat() {
+  return {
+    id: crypto.randomUUID(),
+    title: '新对话',
+    messages: [INITIAL_ASSISTANT_MESSAGE],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
 
+/**
+ * 聊天历史管理 Hook
+ * @returns {Object} 聊天历史相关状态和方法
+ */
 export function useChatHistory() {
   const [chats, setChats] = useState(() => {
     try {
       const saved = localStorage.getItem(CHAT_HISTORY_KEY);
       if (saved) return JSON.parse(saved);
     } catch {
-      // ignore parse error, fall back to initial chat
+      // 忽略解析错误，使用默认值
     }
     return [createInitialChat()];
   });
@@ -34,24 +43,36 @@ export function useChatHistory() {
       const savedId = localStorage.getItem(CURRENT_CHAT_KEY);
       if (savedId) return savedId;
     } catch {
-      // ignore
+      // 忽略错误
     }
     return chats[0]?.id || null;
   });
 
   useEffect(() => {
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chats));
+    try {
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chats));
+    } catch (error) {
+      console.error('保存聊天历史失败:', error);
+    }
   }, [chats]);
 
   useEffect(() => {
     if (currentChatId) {
-      localStorage.setItem(CURRENT_CHAT_KEY, currentChatId);
+      try {
+        localStorage.setItem(CURRENT_CHAT_KEY, currentChatId);
+      } catch (error) {
+        console.error('保存当前聊天ID失败:', error);
+      }
     } else if (chats[0]?.id) {
       setCurrentChatId(chats[0].id);
     }
   }, [currentChatId, chats]);
 
-  const createNewChat = () => {
+  const currentChat = useMemo(() => {
+    return chats.find((chat) => chat.id === currentChatId);
+  }, [chats, currentChatId]);
+
+  const createNewChat = useCallback(() => {
     const newChat = {
       id: crypto.randomUUID(),
       title: '新对话',
@@ -66,9 +87,9 @@ export function useChatHistory() {
     setChats((prev) => [newChat, ...prev]);
     setCurrentChatId(newChat.id);
     return newChat;
-  };
+  }, []);
 
-  const updateChat = (chatId, messages) => {
+  const updateChat = useCallback((chatId, messages) => {
     setChats((prev) =>
       prev.map((chat) => {
         if (chat.id === chatId) {
@@ -83,9 +104,9 @@ export function useChatHistory() {
         return chat;
       })
     );
-  };
+  }, []);
 
-  const deleteChat = (chatId) => {
+  const deleteChat = useCallback((chatId) => {
     setChats((prev) => {
       const filtered = prev.filter((chat) => chat.id !== chatId);
       if (currentChatId === chatId) {
@@ -93,23 +114,19 @@ export function useChatHistory() {
       }
       return filtered;
     });
-  };
+  }, [currentChatId]);
 
-  const getCurrentChat = () => {
-    return chats.find((chat) => chat.id === currentChatId);
-  };
-
-  const switchChat = (chatId) => {
+  const switchChat = useCallback((chatId) => {
     setCurrentChatId(chatId);
-  };
+  }, []);
 
   return {
     chats,
     currentChatId,
+    currentChat,
     createNewChat,
     updateChat,
     deleteChat,
-    getCurrentChat,
     switchChat,
   };
 }

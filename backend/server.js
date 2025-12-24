@@ -6,6 +6,7 @@ import chatRouter from './routes/chat.js';
 const app = express();
 
 app.use(cors(config.cors));
+app.options('*', cors(config.cors));
 app.use(express.json());
 
 app.get('/health', (req, res) => {

@@ -1,24 +1,15 @@
-import { memo, useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { memo, useState, useEffect } from 'react';
 import '../styles/code-highlight.css';
 
-// 缓存 ReactMarkdown 组件配置，避免每次渲染都重新创建
+/**
+ * Markdown 组件配置
+ */
 const markdownComponents = {
   code({ node, inline, className, children, ...props }) {
     if (inline) {
-      return (
-        <code {...props}>
-          {children}
-        </code>
-      );
+      return <code {...props}>{children}</code>;
     }
-    return (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    );
+    return <code className={className} {...props}>{children}</code>;
   },
   pre({ children, ...props }) {
     return <pre {...props}>{children}</pre>;
@@ -28,10 +19,46 @@ const markdownComponents = {
   },
 };
 
+/**
+ * Markdown 渲染器组件（懒加载）
+ */
+function MarkdownRenderer({ content }) {
+  const [MarkdownComponent, setMarkdownComponent] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      import('react-markdown'),
+      import('remark-gfm'),
+      import('rehype-highlight'),
+    ]).then(([ReactMarkdown, remarkGfm, rehypeHighlight]) => {
+      setMarkdownComponent(() => (props) => (
+        <ReactMarkdown.default
+          remarkPlugins={[remarkGfm.default]}
+          rehypePlugins={[rehypeHighlight.default]}
+          components={markdownComponents}
+          {...props}
+        />
+      ));
+    });
+  }, []);
+
+  if (!MarkdownComponent) {
+    return <div>加载中...</div>;
+  }
+
+  return <MarkdownComponent>{content}</MarkdownComponent>;
+}
+
+/**
+ * 消息组件
+ * @param {Object} props
+ * @param {Object} props.message - 消息对象
+ * @param {boolean} props.isTyping - 是否正在输入
+ */
 function Message({ message, isTyping }) {
-  const isUser = useMemo(() => message.role === 'user', [message.role]);
-  const isEmpty = useMemo(() => !message.content || message.content.trim() === '', [message.content]);
-  const showThinking = useMemo(() => !isUser && isTyping && isEmpty, [isUser, isTyping, isEmpty]);
+  const isUser = message.role === 'user';
+  const isEmpty = !message.content || message.content.trim() === '';
+  const showThinking = !isUser && isTyping && isEmpty;
 
   return (
     <div className={`message ${isUser ? 'user-message' : 'ai-message'}`}>
@@ -57,13 +84,7 @@ function Message({ message, isTyping }) {
                   </span>
                 </span>
               ) : (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
-                  components={markdownComponents}
-                >
-                  {message.content}
-                </ReactMarkdown>
+                <MarkdownRenderer content={message.content} />
               )}
             </>
           )}
@@ -73,18 +94,5 @@ function Message({ message, isTyping }) {
   );
 }
 
-export default memo(Message, (prevProps, nextProps) => {
-  // 自定义比较函数：只有 message 或 isTyping 真正改变时才重新渲染
-  // 返回 true 表示 props 相同，不需要重新渲染（React.memo 的行为）
-  // 返回 false 表示 props 不同，需要重新渲染
-  const messageChanged = (
-    prevProps.message.id !== nextProps.message.id ||
-    prevProps.message.content !== nextProps.message.content ||
-    prevProps.message.role !== nextProps.message.role
-  );
-  const typingChanged = prevProps.isTyping !== nextProps.isTyping;
-  
-  // 如果消息或 typing 状态都没改变，返回 true（不重新渲染）
-  return !messageChanged && !typingChanged;
-});
+export default memo(Message);
 

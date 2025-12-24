@@ -1,5 +1,7 @@
 /**
- * 解析 SSE 流式数据
+ * 解析 SSE 流式数据行
+ * @param {string} line - SSE 数据行
+ * @returns {Object|null} 解析后的数据对象
  */
 export function parseSSELine(line) {
   if (!line.trim() || !line.startsWith('data: ')) {
@@ -22,6 +24,9 @@ export function parseSSELine(line) {
 
 /**
  * 处理流式响应数据块
+ * @param {Buffer} chunk - 数据块
+ * @param {string} buffer - 缓冲区
+ * @returns {Object} 处理结果和新的缓冲区
  */
 export function processStreamChunk(chunk, buffer) {
   const newBuffer = buffer + chunk.toString();

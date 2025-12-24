@@ -1,20 +1,41 @@
+import { useMemo } from 'react';
+
+const MOBILE_BREAKPOINT = 769;
+
+/**
+ * 格式化时间戳为相对时间
+ */
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now - date;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 7) return `${days}天前`;
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * 聊天侧边栏组件
+ * @param {Object} props
+ * @param {Array} props.chats - 聊天列表
+ * @param {string} props.currentChatId - 当前聊天ID
+ * @param {Function} props.onNewChat - 新建聊天回调
+ * @param {Function} props.onSwitchChat - 切换聊天回调
+ * @param {Function} props.onDeleteChat - 删除聊天回调
+ * @param {boolean} props.isOpen - 是否打开
+ * @param {Function} props.onToggle - 切换打开状态回调
+ * @param {React.ReactNode} props.themeToggle - 主题切换组件
+ */
 export default function ChatSidebar({ chats, currentChatId, onNewChat, onSwitchChat, onDeleteChat, isOpen, onToggle, themeToggle }) {
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes}分钟前`;
-    if (hours < 24) return `${hours}小时前`;
-    if (days < 7) return `${days}天前`;
-    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-  };
-
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 769;
+  const isMobile = useMemo(() => {
+    return typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT;
+  }, []);
 
   return (
     <>

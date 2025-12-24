@@ -6,6 +6,9 @@ import { setSSEHeaders, sendSSEData, getErrorMessage } from '../utils/errorHandl
 
 const router = express.Router();
 
+/**
+ * 处理聊天请求
+ */
 router.post('/', async (req, res) => {
   try {
     const { messages } = req.body;

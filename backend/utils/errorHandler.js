@@ -1,5 +1,7 @@
 /**
  * 获取友好的错误消息
+ * @param {Error} error - 错误对象
+ * @returns {string} 错误消息
  */
 export function getErrorMessage(error) {
   if (error.response?.status === 401) {
@@ -16,6 +18,7 @@ export function getErrorMessage(error) {
 
 /**
  * 设置 SSE 响应头
+ * @param {Object} res - Express 响应对象
  */
 export function setSSEHeaders(res) {
   if (!res.headersSent) {
@@ -28,6 +31,8 @@ export function setSSEHeaders(res) {
 
 /**
  * 发送 SSE 数据
+ * @param {Object} res - Express 响应对象
+ * @param {Object} data - 要发送的数据
  */
 export function sendSSEData(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);

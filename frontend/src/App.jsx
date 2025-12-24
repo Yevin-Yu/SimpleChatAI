@@ -9,128 +9,67 @@ import ChatInput from './components/ChatInput';
 import ThemeToggle from './components/ThemeToggle';
 import './App.css';
 
-const INITIAL_MESSAGE = {
-  id: crypto.randomUUID(),
-  role: 'assistant',
-  content: '你好！我是你的智能聊天助手，有什么可以帮助你的吗？',
-  timestamp: Date.now(),
-};
+const MOBILE_BREAKPOINT = 769;
 
+/**
+ * 主应用组件
+ */
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const {
     chats,
     currentChatId,
+    currentChat,
     createNewChat,
     updateChat,
     deleteChat,
-    getCurrentChat,
     switchChat,
   } = useChatHistory();
 
-  const [messages, setMessages] = useState(() => {
-    const currentChat = getCurrentChat();
-    return currentChat?.messages || [INITIAL_MESSAGE];
-  });
-
+  const messages = useMemo(() => currentChat?.messages || [], [currentChat?.messages]);
+  
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => {
-    return typeof window !== 'undefined' && window.innerWidth >= 769;
+    return typeof window !== 'undefined' && window.innerWidth >= MOBILE_BREAKPOINT;
   });
+  
   const messagesEndRef = useRef(null);
-  const isUpdatingFromChatRef = useRef(false);
   const prevChatIdRef = useRef(currentChatId);
   const prevMessagesLengthRef = useRef(messages.length);
-  const prevLastMessageContentRef = useRef('');
+  const shouldScrollRef = useRef(false);
 
-  // 当切换聊天时，从 chat 中加载消息
+  // 切换聊天时重置滚动状态
   useEffect(() => {
-    // 只有当 currentChatId 改变时才从 chat 加载消息
     if (prevChatIdRef.current !== currentChatId) {
       prevChatIdRef.current = currentChatId;
-      const currentChat = getCurrentChat();
-      if (currentChat) {
-        isUpdatingFromChatRef.current = true;
-        setMessages(currentChat.messages);
-      } else if (chats.length === 0) {
-        const newChat = createNewChat();
-        isUpdatingFromChatRef.current = true;
-        setMessages(newChat.messages);
-      } else {
-        isUpdatingFromChatRef.current = true;
-        setMessages([INITIAL_MESSAGE]);
-      }
+      prevMessagesLengthRef.current = messages.length;
+      shouldScrollRef.current = true;
     }
-  }, [currentChatId]);
+  }, [currentChatId, messages.length]);
 
-  // 只在消息数量增加或 AI 回复内容更新时滚动（避免输入时闪烁）
+  // 智能滚动：只在需要时滚动
   useEffect(() => {
-    const currentLength = messages.length;
-    const lastMessage = messages[messages.length - 1];
-    const lastMessageContent = lastMessage?.content || '';
-    const isNewMessage = currentLength > prevMessagesLengthRef.current;
-    const isAIMessageUpdate = loading && 
-                              lastMessage?.role === 'assistant' && 
-                              lastMessageContent !== prevLastMessageContentRef.current;
-
-    // 只在以下情况滚动：
-    // 1. 新消息添加（消息数量增加）
-    // 2. AI 正在回复且内容更新
-    // 3. 切换聊天时（消息从 0 变为有消息）
-    if (isNewMessage || isAIMessageUpdate || (currentLength > 0 && prevMessagesLengthRef.current === 0)) {
-      prevMessagesLengthRef.current = currentLength;
-      prevLastMessageContentRef.current = lastMessageContent;
-      
-      // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+    const shouldScroll = shouldScrollRef.current || 
+                        messages.length > prevMessagesLengthRef.current ||
+                        (loading && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant');
+    
+    if (shouldScroll) {
+      prevMessagesLengthRef.current = messages.length;
+      shouldScrollRef.current = false;
       requestAnimationFrame(() => {
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       });
-    } else {
-      prevMessagesLengthRef.current = currentLength;
-      if (lastMessage) {
-        prevLastMessageContentRef.current = lastMessageContent;
-      }
     }
   }, [messages, loading]);
-
-  // 将 messages 同步到 chat，但避免循环更新
-  useEffect(() => {
-    // 如果是从 chat 加载的消息，不需要同步回去
-    if (isUpdatingFromChatRef.current) {
-      isUpdatingFromChatRef.current = false;
-      return;
-    }
-
-    if (currentChatId && messages.length > 0) {
-      const currentChat = getCurrentChat();
-      const chatMessages = currentChat?.messages || [];
-      
-      // 优化：先比较长度，再比较最后一条消息（避免频繁的 JSON.stringify）
-      if (chatMessages.length !== messages.length) {
-        updateChat(currentChatId, messages);
-      } else if (chatMessages.length > 0) {
-        // 只比较最后一条消息（最常变化的部分）
-        const lastChatMsg = chatMessages[chatMessages.length - 1];
-        const lastMsg = messages[messages.length - 1];
-        if (!lastChatMsg || !lastMsg || 
-            lastChatMsg.content !== lastMsg.content || 
-            lastChatMsg.role !== lastMsg.role ||
-            lastChatMsg.id !== lastMsg.id) {
-          updateChat(currentChatId, messages);
-        }
-      }
-    }
-  }, [messages, currentChatId]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
 
-    if (!currentChatId) {
+    let chatId = currentChatId;
+    if (!chatId) {
       const newChat = createNewChat();
-      setMessages(newChat.messages);
+      chatId = newChat.id;
     }
 
     const userMessage = { 
@@ -139,61 +78,61 @@ export default function App() {
       content: input.trim(),
       timestamp: Date.now()
     };
+    
     const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput('');
-    setLoading(true);
-
     const aiMessageIndex = newMessages.length;
-    setMessages([...newMessages, { 
+    const messagesWithAI = [...newMessages, { 
       id: crypto.randomUUID(),
       role: 'assistant', 
       content: '',
       timestamp: Date.now()
-    }]);
+    }];
+
+    updateChat(chatId, messagesWithAI);
+    setInput('');
+    setLoading(true);
+    shouldScrollRef.current = true;
 
     let accumulatedContent = '';
 
-    await sendChatMessage(
-      newMessages.map((msg) => ({ role: msg.role, content: msg.content })),
-      (content) => {
-        accumulatedContent += content;
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[aiMessageIndex] = {
-            role: 'assistant',
+    try {
+      await sendChatMessage(
+        newMessages.map((msg) => ({ role: msg.role, content: msg.content })),
+        (content) => {
+          accumulatedContent += content;
+          const updatedMessages = [...messagesWithAI];
+          updatedMessages[aiMessageIndex] = {
+            ...updatedMessages[aiMessageIndex],
             content: accumulatedContent,
           };
-          return updated;
-        });
-      },
-      (error) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[aiMessageIndex] = {
-            role: 'assistant',
+          updateChat(chatId, updatedMessages);
+        },
+        (error) => {
+          const updatedMessages = [...messagesWithAI];
+          updatedMessages[aiMessageIndex] = {
+            ...updatedMessages[aiMessageIndex],
             content: `抱歉，发生了错误：${error}`,
           };
-          return updated;
-        });
-        setLoading(false);
-      }
-    );
-
-    setLoading(false);
-  }, [input, loading, messages, currentChatId, createNewChat]);
+          updateChat(chatId, updatedMessages);
+          setLoading(false);
+        }
+      );
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+    }
+  }, [input, loading, currentChatId, messages, createNewChat, updateChat]);
 
   const handleNewChat = useCallback(() => {
-    const newChat = createNewChat();
-    setMessages(newChat.messages);
-    if (window.innerWidth < 769) {
+    createNewChat();
+    if (window.innerWidth < MOBILE_BREAKPOINT) {
       setSidebarOpen(false);
     }
   }, [createNewChat]);
 
   const handleSwitchChat = useCallback((chatId) => {
     switchChat(chatId);
-    if (window.innerWidth < 769) {
+    if (window.innerWidth < MOBILE_BREAKPOINT) {
       setSidebarOpen(false);
     }
   }, [switchChat]);
@@ -215,21 +154,19 @@ export default function App() {
         themeToggle={<ThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
       <div className="chat-container">
-        <ChatHeader
-          onMenuClick={handleToggleSidebar}
-        />
+        <ChatHeader onMenuClick={handleToggleSidebar} />
         <div className="messages-container">
-          {useMemo(() => messages.map((message, index) => {
+          {messages.map((message, index) => {
             const isLastMessage = index === messages.length - 1;
             const isTypingMessage = loading && isLastMessage && message.role === 'assistant';
             return (
               <Message
-                key={message.id || `msg-${index}-${message.timestamp || Date.now()}`}
+                key={message.id || `msg-${index}`}
                 message={message}
                 isTyping={isTypingMessage}
               />
             );
-          }), [messages, loading])}
+          })}
           <div ref={messagesEndRef} />
         </div>
         <ChatInput
