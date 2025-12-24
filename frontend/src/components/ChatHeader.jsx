@@ -1,4 +1,6 @@
-export default function ChatHeader({ themeToggle, onMenuClick }) {
+import { memo } from 'react';
+
+function ChatHeader({ onMenuClick }) {
   return (
     <div className="chat-header">
       <div className="header-left">
@@ -7,11 +9,12 @@ export default function ChatHeader({ themeToggle, onMenuClick }) {
         </button>
         <h1>
           <span>SimpleChat</span>
-          <span className="header-subtitle">基于 Deepseek 的智能聊天助手</span>
+          <span className="header-subtitle">使用 Deepseek API</span>
         </h1>
       </div>
-      {themeToggle}
     </div>
   );
 }
+
+export default memo(ChatHeader);
 

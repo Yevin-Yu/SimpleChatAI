@@ -1,15 +1,21 @@
-export default function ChatInput({ value, onChange, onSend, disabled, loading }) {
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+import { useMemo, memo, useCallback } from 'react';
+
+function ChatInput({ value, onChange, onSend, disabled, loading }) {
+  const isMobile = useMemo(() => {
+    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+           (typeof window !== 'undefined' && window.innerWidth < 768);
+  }, []);
+  
   const placeholder = isMobile 
     ? '输入消息...' 
     : '输入消息... (按 Enter 发送，Shift+Enter 换行)';
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onSend();
     }
-  };
+  }, [onSend]);
 
   return (
     <div className="input-container">
@@ -51,4 +57,6 @@ export default function ChatInput({ value, onChange, onSend, disabled, loading }
     </div>
   );
 }
+
+export default ChatInput;
 

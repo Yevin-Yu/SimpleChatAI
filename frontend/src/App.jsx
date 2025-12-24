@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { sendChatMessage } from './utils/api';
 import { useTheme } from './hooks/useTheme';
 import { useChatHistory } from './hooks/useChatHistory';
@@ -10,8 +10,10 @@ import ThemeToggle from './components/ThemeToggle';
 import './App.css';
 
 const INITIAL_MESSAGE = {
+  id: crypto.randomUUID(),
   role: 'assistant',
   content: '你好！我是你的智能聊天助手，有什么可以帮助你的吗？',
+  timestamp: Date.now(),
 };
 
 export default function App() {
@@ -37,30 +39,93 @@ export default function App() {
     return typeof window !== 'undefined' && window.innerWidth >= 769;
   });
   const messagesEndRef = useRef(null);
+  const isUpdatingFromChatRef = useRef(false);
+  const prevChatIdRef = useRef(currentChatId);
+  const prevMessagesLengthRef = useRef(messages.length);
+  const prevLastMessageContentRef = useRef('');
 
+  // 当切换聊天时，从 chat 中加载消息
   useEffect(() => {
-    const currentChat = getCurrentChat();
-    if (currentChat) {
-      setMessages(currentChat.messages);
-    } else if (chats.length === 0) {
-      const newChat = createNewChat();
-      setMessages(newChat.messages);
-    } else {
-      setMessages([INITIAL_MESSAGE]);
+    // 只有当 currentChatId 改变时才从 chat 加载消息
+    if (prevChatIdRef.current !== currentChatId) {
+      prevChatIdRef.current = currentChatId;
+      const currentChat = getCurrentChat();
+      if (currentChat) {
+        isUpdatingFromChatRef.current = true;
+        setMessages(currentChat.messages);
+      } else if (chats.length === 0) {
+        const newChat = createNewChat();
+        isUpdatingFromChatRef.current = true;
+        setMessages(newChat.messages);
+      } else {
+        isUpdatingFromChatRef.current = true;
+        setMessages([INITIAL_MESSAGE]);
+      }
     }
-  }, [currentChatId, chats]);
+  }, [currentChatId]);
 
+  // 只在消息数量增加或 AI 回复内容更新时滚动（避免输入时闪烁）
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const currentLength = messages.length;
+    const lastMessage = messages[messages.length - 1];
+    const lastMessageContent = lastMessage?.content || '';
+    const isNewMessage = currentLength > prevMessagesLengthRef.current;
+    const isAIMessageUpdate = loading && 
+                              lastMessage?.role === 'assistant' && 
+                              lastMessageContent !== prevLastMessageContentRef.current;
 
+    // 只在以下情况滚动：
+    // 1. 新消息添加（消息数量增加）
+    // 2. AI 正在回复且内容更新
+    // 3. 切换聊天时（消息从 0 变为有消息）
+    if (isNewMessage || isAIMessageUpdate || (currentLength > 0 && prevMessagesLengthRef.current === 0)) {
+      prevMessagesLengthRef.current = currentLength;
+      prevLastMessageContentRef.current = lastMessageContent;
+      
+      // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
+      requestAnimationFrame(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    } else {
+      prevMessagesLengthRef.current = currentLength;
+      if (lastMessage) {
+        prevLastMessageContentRef.current = lastMessageContent;
+      }
+    }
+  }, [messages, loading]);
+
+  // 将 messages 同步到 chat，但避免循环更新
   useEffect(() => {
+    // 如果是从 chat 加载的消息，不需要同步回去
+    if (isUpdatingFromChatRef.current) {
+      isUpdatingFromChatRef.current = false;
+      return;
+    }
+
     if (currentChatId && messages.length > 0) {
-      updateChat(currentChatId, messages);
+      const currentChat = getCurrentChat();
+      const chatMessages = currentChat?.messages || [];
+      
+      // 优化：先比较长度，再比较最后一条消息（避免频繁的 JSON.stringify）
+      if (chatMessages.length !== messages.length) {
+        updateChat(currentChatId, messages);
+      } else if (chatMessages.length > 0) {
+        // 只比较最后一条消息（最常变化的部分）
+        const lastChatMsg = chatMessages[chatMessages.length - 1];
+        const lastMsg = messages[messages.length - 1];
+        if (!lastChatMsg || !lastMsg || 
+            lastChatMsg.content !== lastMsg.content || 
+            lastChatMsg.role !== lastMsg.role ||
+            lastChatMsg.id !== lastMsg.id) {
+          updateChat(currentChatId, messages);
+        }
+      }
     }
   }, [messages, currentChatId]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
 
     if (!currentChatId) {
@@ -68,14 +133,24 @@ export default function App() {
       setMessages(newChat.messages);
     }
 
-    const userMessage = { role: 'user', content: input.trim() };
+    const userMessage = { 
+      id: crypto.randomUUID(),
+      role: 'user', 
+      content: input.trim(),
+      timestamp: Date.now()
+    };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput('');
     setLoading(true);
 
     const aiMessageIndex = newMessages.length;
-    setMessages([...newMessages, { role: 'assistant', content: '' }]);
+    setMessages([...newMessages, { 
+      id: crypto.randomUUID(),
+      role: 'assistant', 
+      content: '',
+      timestamp: Date.now()
+    }]);
 
     let accumulatedContent = '';
 
@@ -106,22 +181,26 @@ export default function App() {
     );
 
     setLoading(false);
-  };
+  }, [input, loading, messages, currentChatId, createNewChat]);
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     const newChat = createNewChat();
     setMessages(newChat.messages);
     if (window.innerWidth < 769) {
       setSidebarOpen(false);
     }
-  };
+  }, [createNewChat]);
 
-  const handleSwitchChat = (chatId) => {
+  const handleSwitchChat = useCallback((chatId) => {
     switchChat(chatId);
     if (window.innerWidth < 769) {
       setSidebarOpen(false);
     }
-  };
+  }, [switchChat]);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
 
   return (
     <div className="app">
@@ -132,21 +211,25 @@ export default function App() {
         onSwitchChat={handleSwitchChat}
         onDeleteChat={deleteChat}
         isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onToggle={handleToggleSidebar}
+        themeToggle={<ThemeToggle theme={theme} onToggle={toggleTheme} />}
       />
       <div className="chat-container">
         <ChatHeader
-          themeToggle={<ThemeToggle theme={theme} onToggle={toggleTheme} />}
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+          onMenuClick={handleToggleSidebar}
         />
         <div className="messages-container">
-          {messages.map((message, index) => (
-            <Message
-              key={index}
-              message={message}
-              isTyping={loading && index === messages.length - 1 && message.role === 'assistant'}
-            />
-          ))}
+          {useMemo(() => messages.map((message, index) => {
+            const isLastMessage = index === messages.length - 1;
+            const isTypingMessage = loading && isLastMessage && message.role === 'assistant';
+            return (
+              <Message
+                key={message.id || `msg-${index}-${message.timestamp || Date.now()}`}
+                message={message}
+                isTyping={isTypingMessage}
+              />
+            );
+          }), [messages, loading])}
           <div ref={messagesEndRef} />
         </div>
         <ChatInput

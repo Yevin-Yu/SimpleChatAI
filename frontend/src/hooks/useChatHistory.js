@@ -3,15 +3,17 @@ import { useState, useEffect } from 'react';
 const CHAT_HISTORY_KEY = 'simplechat-history';
 const CURRENT_CHAT_KEY = 'simplechat-current-chat';
 
+const INITIAL_ASSISTANT_MESSAGE = {
+  id: crypto.randomUUID(),
+  role: 'assistant',
+  content: '你好！我是你的智能聊天助手，有什么可以帮助你的吗？',
+  timestamp: Date.now(),
+};
+
 const createInitialChat = () => ({
   id: crypto.randomUUID(),
   title: '新对话',
-  messages: [
-    {
-      role: 'assistant',
-      content: '你好！我是你的智能聊天助手，有什么可以帮助你的吗？',
-    },
-  ],
+  messages: [INITIAL_ASSISTANT_MESSAGE],
   createdAt: Date.now(),
   updatedAt: Date.now(),
 });
@@ -53,12 +55,11 @@ export function useChatHistory() {
     const newChat = {
       id: crypto.randomUUID(),
       title: '新对话',
-      messages: [
-        {
-          role: 'assistant',
-          content: '你好！我是你的智能聊天助手，有什么可以帮助你的吗？',
-        },
-      ],
+      messages: [{
+        ...INITIAL_ASSISTANT_MESSAGE,
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+      }],
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -85,11 +86,13 @@ export function useChatHistory() {
   };
 
   const deleteChat = (chatId) => {
-    setChats((prev) => prev.filter((chat) => chat.id !== chatId));
-    if (currentChatId === chatId) {
-      const remaining = chats.filter((chat) => chat.id !== chatId);
-      setCurrentChatId(remaining.length > 0 ? remaining[0].id : null);
-    }
+    setChats((prev) => {
+      const filtered = prev.filter((chat) => chat.id !== chatId);
+      if (currentChatId === chatId) {
+        setCurrentChatId(filtered.length > 0 ? filtered[0].id : null);
+      }
+      return filtered;
+    });
   };
 
   const getCurrentChat = () => {
