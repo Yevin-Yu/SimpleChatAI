@@ -8,6 +8,9 @@ const INITIAL_ASSISTANT_MESSAGE = {
   timestamp: Date.now(),
 };
 
+/**
+ * 创建初始聊天
+ */
 function createInitialChat() {
   return {
     id: crypto.randomUUID(),

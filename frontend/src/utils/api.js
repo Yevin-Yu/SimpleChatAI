@@ -1,29 +1,29 @@
+/**
+ * 获取 API 基础 URL
+ */
 function getApiBaseUrl() {
   const envUrl = import.meta.env.VITE_API_BASE_URL;
   const isDev = import.meta.env.DEV;
   
-  if (isDev) {
-    return '/api';
+  if (isDev) return '/api';
+  if (!envUrl) return 'http://localhost:3001';
+  
+  if (envUrl.startsWith('http://') || envUrl.startsWith('https://')) {
+    return envUrl.endsWith('/api') || envUrl.endsWith('/api/')
+      ? envUrl.replace(/\/$/, '')
+      : `${envUrl.replace(/\/$/, '')}/api`;
   }
   
-  if (envUrl) {
-    if (envUrl.startsWith('http://') || envUrl.startsWith('https://')) {
-      return envUrl.endsWith('/api') || envUrl.endsWith('/api/')
-        ? envUrl.replace(/\/$/, '')
-        : `${envUrl.replace(/\/$/, '')}/api`;
-    }
-    return envUrl;
-  }
-  
-  return 'http://localhost:3001';
+  return envUrl;
 }
 
 const API_BASE_URL = getApiBaseUrl();
 
+/**
+ * 解析 SSE 数据行
+ */
 function parseSSELine(line) {
-  if (!line.startsWith('data: ')) {
-    return null;
-  }
+  if (!line.startsWith('data: ')) return null;
 
   try {
     const data = JSON.parse(line.slice(6));
@@ -36,7 +36,14 @@ function parseSSELine(line) {
   }
 }
 
-export async function sendChatMessage(messages, onChunk, onError) {
+/**
+ * 发送聊天消息（流式响应）
+ * @param {Array} messages - 消息列表
+ * @param {Function} onChunk - 接收到数据块时的回调
+ * @param {Function} onError - 错误回调
+ * @param {AbortSignal} abortSignal - 取消信号
+ */
+export async function sendChatMessage(messages, onChunk, onError, abortSignal) {
   try {
     const apiUrl = API_BASE_URL.endsWith('/') 
       ? `${API_BASE_URL}chat` 
@@ -46,6 +53,7 @@ export async function sendChatMessage(messages, onChunk, onError) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages }),
+      signal: abortSignal,
     });
 
     if (!response.ok) {
@@ -79,6 +87,7 @@ export async function sendChatMessage(messages, onChunk, onError) {
       }
     }
   } catch (error) {
+    if (error.name === 'AbortError') return;
     onError(error.message);
   }
 }

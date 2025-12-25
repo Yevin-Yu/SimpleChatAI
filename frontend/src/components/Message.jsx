@@ -1,47 +1,5 @@
-import { memo, useState, useEffect } from 'react';
-import '../styles/code-highlight.css';
-
-const markdownComponents = {
-  code({ node, inline, className, children, ...props }) {
-    if (inline) {
-      return <code {...props}>{children}</code>;
-    }
-    return <code className={className} {...props}>{children}</code>;
-  },
-  pre({ children, ...props }) {
-    return <pre {...props}>{children}</pre>;
-  },
-  p({ children, ...props }) {
-    return <p {...props}>{children}</p>;
-  },
-};
-
-function MarkdownRenderer({ content }) {
-  const [MarkdownComponent, setMarkdownComponent] = useState(null);
-
-  useEffect(() => {
-    Promise.all([
-      import('react-markdown'),
-      import('remark-gfm'),
-      import('rehype-highlight'),
-    ]).then(([ReactMarkdown, remarkGfm, rehypeHighlight]) => {
-      setMarkdownComponent(() => (props) => (
-        <ReactMarkdown.default
-          remarkPlugins={[remarkGfm.default]}
-          rehypePlugins={[rehypeHighlight.default]}
-          components={markdownComponents}
-          {...props}
-        />
-      ));
-    });
-  }, []);
-
-  if (!MarkdownComponent) {
-    return null;
-  }
-
-  return <MarkdownComponent>{content}</MarkdownComponent>;
-}
+import { memo } from 'react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 function Message({ message, isTyping }) {
   const isUser = message.role === 'user';

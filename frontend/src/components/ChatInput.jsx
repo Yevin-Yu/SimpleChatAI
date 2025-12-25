@@ -1,19 +1,32 @@
+import { useRef } from 'react';
 import { isMobile } from '../utils/device';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 
-export default function ChatInput({ value, onChange, onSend, disabled, loading }) {
-  const placeholder = isMobile() 
-    ? '输入消息...' 
-    : '输入消息... (按 Enter 发送，Shift+Enter 换行)';
+const PLACEHOLDER = {
+  mobile: '输入消息...',
+  desktop: '输入消息... (按 Enter 发送，Shift+Enter 换行)',
+};
+
+export default function ChatInput({ value, onChange, onSend, onStop, disabled, loading }) {
+  const containerRef = useRef(null);
+  const bottomOffset = useKeyboardOffset();
+  
+  const placeholder = isMobile() ? PLACEHOLDER.mobile : PLACEHOLDER.desktop;
+  const containerStyle = isMobile() ? { bottom: `${bottomOffset}px` } : {};
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !loading) {
       e.preventDefault();
       onSend();
     }
   };
 
   return (
-    <div className="input-container">
+    <div 
+      ref={containerRef}
+      className="input-container"
+      style={containerStyle}
+    >
       <div className="input-wrapper">
         <textarea
           value={value}
@@ -25,13 +38,25 @@ export default function ChatInput({ value, onChange, onSend, disabled, loading }
           className="message-input"
         />
         <button
-          onClick={onSend}
-          disabled={!value.trim() || disabled}
+          onClick={loading ? onStop : onSend}
+          disabled={!loading && (!value.trim() || disabled)}
           className="send-button"
-          aria-label="发送消息"
+          aria-label={loading ? '暂停回答' : '发送消息'}
         >
           {loading ? (
-            <span className="loading-dots">...</span>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="6" y="4" width="4" height="16"></rect>
+              <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
           ) : (
             <svg
               width="20"

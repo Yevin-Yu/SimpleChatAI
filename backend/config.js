@@ -5,6 +5,7 @@ dotenv.config();
 const DEFAULT_PORT = 3001;
 const DEFAULT_DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
+const DEEPSEEK_SYSTEM_PROMPT = '请用最少、最精准的文字回答。直接给出答案，不要多余的客套话和解释。';
 
 /**
  * 获取允许的前端地址列表
@@ -49,6 +50,7 @@ export const config = {
     model: 'deepseek-chat',
     temperature: 0.7,
     maxTokens: 2000,
+    systemPrompt: process.env.DEEPSEEK_SYSTEM_PROMPT || DEEPSEEK_SYSTEM_PROMPT,
   },
   cors: {
     origin: corsOrigin,

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { sendChatMessage } from './utils/api';
 import { useTheme } from './hooks/useTheme';
 import { useChatHistory } from './hooks/useChatHistory';
+import { useScrollToBottom } from './hooks/useScrollToBottom';
 import { isMobile } from './utils/device';
 import ChatHeader from './components/ChatHeader';
 import ChatSidebar from './components/ChatSidebar';
@@ -26,112 +27,36 @@ export default function App() {
   
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messagesVisible, setMessagesVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile());
+  const abortControllerRef = useRef(null);
   
   const messagesEndRef = useRef(null);
-  const messagesContainerRef = useRef(null);
   const prevChatIdRef = useRef(currentChatId);
-  const prevMessagesLengthRef = useRef(messages.length);
-  const shouldScrollRef = useRef(false);
-  const isInitialMountRef = useRef(true);
-  const justSwitchedChatRef = useRef(false);
+  const { requestScroll } = useScrollToBottom(messagesEndRef, [messages, loading, currentChatId]);
 
-  const scrollToBottom = useCallback((immediate = false) => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    const scroll = (retryCount = 0) => {
-      const maxScroll = container.scrollHeight - container.clientHeight;
-      
-      if (maxScroll > 0) {
-        container.scrollTop = maxScroll;
-        
-        requestAnimationFrame(() => {
-          const currentMaxScroll = container.scrollHeight - container.clientHeight;
-          const distanceFromBottom = Math.abs(container.scrollTop - currentMaxScroll);
-          
-          if (distanceFromBottom > 5 && currentMaxScroll > 0 && retryCount < 2) {
-            container.scrollTop = currentMaxScroll;
-            scroll(retryCount + 1);
-          }
-        });
-      }
-    };
-
-    if (immediate) {
-      scroll();
-    } else {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          scroll();
-        });
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isInitialMountRef.current && messages.length > 0) {
-      isInitialMountRef.current = false;
-      setTimeout(() => scrollToBottom(true), 100);
-    }
-  }, [messages.length, scrollToBottom]);
-
+  // 切换聊天时滚动到底部
   useEffect(() => {
     if (prevChatIdRef.current !== currentChatId) {
       prevChatIdRef.current = currentChatId;
-      prevMessagesLengthRef.current = messages.length;
-      shouldScrollRef.current = true;
-      justSwitchedChatRef.current = true;
-      setMessagesVisible(false);
-      
       if (messages.length > 0) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            scrollToBottom(true);
-            requestAnimationFrame(() => {
-              setMessagesVisible(true);
-              justSwitchedChatRef.current = false;
-            });
-          });
-        });
-      } else {
-        requestAnimationFrame(() => {
-          setMessagesVisible(true);
-          justSwitchedChatRef.current = false;
-        });
+        requestScroll(true);
       }
-    } else if (justSwitchedChatRef.current && messages.length > 0) {
-      prevMessagesLengthRef.current = messages.length;
-      shouldScrollRef.current = true;
-      setMessagesVisible(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          scrollToBottom(true);
-          requestAnimationFrame(() => {
-            setMessagesVisible(true);
-            justSwitchedChatRef.current = false;
-          });
-        });
-      });
     }
-  }, [currentChatId, messages.length, scrollToBottom]);
+  }, [currentChatId, messages.length, requestScroll]);
 
+  // 消息更新时滚动到底部
   useEffect(() => {
-    if (justSwitchedChatRef.current) return;
-
-    const shouldScroll = shouldScrollRef.current || 
-                        messages.length > prevMessagesLengthRef.current ||
-                        (loading && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant');
-    
-    if (shouldScroll) {
-      prevMessagesLengthRef.current = messages.length;
-      shouldScrollRef.current = false;
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+    if (messages.length > 0) {
+      requestScroll();
     }
-  }, [messages, loading]);
+  }, [messages.length, requestScroll]);
+
+  // 加载状态变化时也滚动
+  useEffect(() => {
+    if (loading && messages.length > 0) {
+      requestScroll();
+    }
+  }, [loading, messages.length, requestScroll]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -161,7 +86,10 @@ export default function App() {
     updateChat(chatId, messagesWithAI);
     setInput('');
     setLoading(true);
-    shouldScrollRef.current = true;
+    requestScroll();
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     let accumulatedContent = '';
 
@@ -181,17 +109,29 @@ export default function App() {
           const updatedMessages = [...messagesWithAI];
           updatedMessages[aiMessageIndex] = {
             ...updatedMessages[aiMessageIndex],
-            content: `抱歉，发生了错误：${error}`,
+            content: `错误：${error}`,
           };
           updateChat(chatId, updatedMessages);
           setLoading(false);
-        }
+          abortControllerRef.current = null;
+        },
+        abortController.signal
       );
       setLoading(false);
+      abortControllerRef.current = null;
     } catch (error) {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   }, [input, loading, currentChatId, messages, createNewChat, updateChat]);
+
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setLoading(false);
+    }
+  }, []);
 
   const handleNewChat = useCallback(() => {
     createNewChat();
@@ -225,17 +165,8 @@ export default function App() {
       />
       <div className="chat-container">
         <ChatHeader onMenuClick={handleToggleSidebar} />
-        <div 
-          ref={messagesContainerRef}
-          className="messages-container"
-        >
-          <div 
-            className="messages-content"
-            style={{ 
-              opacity: messagesVisible ? 1 : 0,
-              transition: 'opacity 0.2s ease-in-out'
-            }}
-          >
+        <div className="messages-container">
+          <div className="messages-content">
             {messages.map((message, index) => {
               const isLastMessage = index === messages.length - 1;
               const isTypingMessage = loading && isLastMessage && message.role === 'assistant';
@@ -254,6 +185,7 @@ export default function App() {
           value={input}
           onChange={setInput}
           onSend={handleSend}
+          onStop={handleStop}
           disabled={loading}
           loading={loading}
         />

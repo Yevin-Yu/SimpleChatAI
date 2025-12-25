@@ -7,8 +7,24 @@ import { setSSEHeaders, sendSSEData, getErrorMessage } from '../utils/errorHandl
 const router = express.Router();
 
 /**
- * 处理聊天请求
+ * 准备发送给 API 的消息列表，确保包含系统提示
  */
+function prepareMessages(userMessages) {
+  const hasSystemMessage = userMessages.length > 0 && userMessages[0]?.role === 'system';
+  
+  if (hasSystemMessage) {
+    return userMessages;
+  }
+  
+  // 在消息列表开头插入系统提示
+  const systemMessage = {
+    role: 'system',
+    content: config.deepseek.systemPrompt,
+  };
+  
+  return [systemMessage, ...userMessages];
+}
+
 router.post('/', async (req, res) => {
   try {
     const { messages } = req.body;
@@ -23,11 +39,14 @@ router.post('/', async (req, res) => {
 
     setSSEHeaders(res);
 
+    // 准备消息，自动注入系统提示
+    const preparedMessages = prepareMessages(messages);
+
     const response = await axios.post(
       config.deepseek.apiUrl,
       {
         model: config.deepseek.model,
-        messages,
+        messages: preparedMessages,
         temperature: config.deepseek.temperature,
         max_tokens: config.deepseek.maxTokens,
         stream: true,
