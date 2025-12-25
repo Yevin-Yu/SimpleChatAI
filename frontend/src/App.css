@@ -1295,7 +1295,7 @@
   }
 
   .messages-end-spacer {
-    height: calc(120px + env(safe-area-inset-bottom));
+    height: calc(40px + env(safe-area-inset-bottom));
   }
 
   .message {
@@ -1465,7 +1465,7 @@
   }
 
   .messages-end-spacer {
-    height: calc(120px + env(safe-area-inset-bottom));
+    height: calc(40px + env(safe-area-inset-bottom));
   }
 
   .message-avatar {
