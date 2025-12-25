@@ -1,6 +1,4 @@
-import { useRef } from 'react';
 import { isMobile } from '../utils/device';
-import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 
 const PLACEHOLDER = {
   mobile: '输入消息...',
@@ -8,11 +6,7 @@ const PLACEHOLDER = {
 };
 
 export default function ChatInput({ value, onChange, onSend, onStop, disabled, loading }) {
-  const containerRef = useRef(null);
-  const bottomOffset = useKeyboardOffset();
-  
   const placeholder = isMobile() ? PLACEHOLDER.mobile : PLACEHOLDER.desktop;
-  const containerStyle = isMobile() ? { bottom: `${bottomOffset}px` } : {};
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !loading) {
@@ -22,11 +16,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, disabled, l
   };
 
   return (
-    <div 
-      ref={containerRef}
-      className="input-container"
-      style={containerStyle}
-    >
+    <div className="input-container">
       <div className="input-wrapper">
         <textarea
           value={value}
