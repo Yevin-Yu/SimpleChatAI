@@ -1,6 +1,3 @@
-/**
- * 获取 API 基础 URL
- */
 function getApiBaseUrl() {
   const envUrl = import.meta.env.VITE_API_BASE_URL;
   const isDev = import.meta.env.DEV;
@@ -19,9 +16,6 @@ function getApiBaseUrl() {
 
 const API_BASE_URL = getApiBaseUrl();
 
-/**
- * 解析 SSE 数据行
- */
 function parseSSELine(line) {
   if (!line.startsWith('data: ')) return null;
 
@@ -36,13 +30,6 @@ function parseSSELine(line) {
   }
 }
 
-/**
- * 发送聊天消息（流式响应）
- * @param {Array} messages - 消息列表
- * @param {Function} onChunk - 接收到数据块时的回调
- * @param {Function} onError - 错误回调
- * @param {AbortSignal} abortSignal - 取消信号
- */
 export async function sendChatMessage(messages, onChunk, onError, abortSignal) {
   try {
     const apiUrl = API_BASE_URL.endsWith('/') 

@@ -13,9 +13,6 @@ const markdownComponents = {
   },
 };
 
-/**
- * Markdown 渲染组件（懒加载）
- */
 export default function MarkdownRenderer({ content }) {
   const [MarkdownComponent, setMarkdownComponent] = useState(null);
 
@@ -33,6 +30,8 @@ export default function MarkdownRenderer({ content }) {
           {...props}
         />
       ));
+    }).catch(() => {
+      // 静默处理加载错误
     });
   }, []);
 

@@ -14,8 +14,8 @@ export function useTheme() {
     try {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem(THEME_KEY, theme);
-    } catch (error) {
-      console.error('设置主题失败:', error);
+    } catch {
+      // 静默处理
     }
   }, [theme]);
 

@@ -8,9 +8,6 @@ const INITIAL_ASSISTANT_MESSAGE = {
   timestamp: Date.now(),
 };
 
-/**
- * 创建初始聊天
- */
 function createInitialChat() {
   return {
     id: crypto.randomUUID(),
@@ -45,8 +42,8 @@ export function useChatHistory() {
   useEffect(() => {
     try {
       localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chats));
-    } catch (error) {
-      console.error('保存聊天历史失败:', error);
+    } catch {
+      // 静默处理存储错误
     }
   }, [chats]);
 
@@ -54,8 +51,8 @@ export function useChatHistory() {
     if (currentChatId) {
       try {
         localStorage.setItem(CURRENT_CHAT_KEY, currentChatId);
-      } catch (error) {
-        console.error('保存当前聊天ID失败:', error);
+      } catch {
+        // 静默处理
       }
     } else if (chats[0]?.id) {
       setCurrentChatId(chats[0].id);

@@ -8,7 +8,7 @@ const PLACEHOLDER = {
 export default function ChatInput({ value, onChange, onSend, onStop, disabled, loading }) {
   const placeholder = isMobile() ? PLACEHOLDER.mobile : PLACEHOLDER.desktop;
 
-  const handleKeyPress = (e) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !loading) {
       e.preventDefault();
       onSend();
@@ -21,7 +21,7 @@ export default function ChatInput({ value, onChange, onSend, onStop, disabled, l
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={2}
           disabled={disabled}

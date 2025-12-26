@@ -1,8 +1,5 @@
 import { isMobile } from '../utils/device';
 
-/**
- * 格式化时间戳为相对时间
- */
 function formatTime(timestamp) {
   const date = new Date(timestamp);
   const now = new Date();

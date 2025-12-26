@@ -27,66 +27,102 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => !isMobile());
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const abortControllerRef = useRef(null);
   
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const prevChatIdRef = useRef(currentChatId);
   const lastMessageContentRef = useRef('');
-  
-  // 切换聊天时滚动到底部
+  const shouldAutoScrollRef = useRef(true);
+  const scrollTimeoutRef = useRef(null);
+
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    return scrollHeight - scrollTop - clientHeight < 50;
+  }, []);
+
+  const scrollToBottom = useCallback((immediate = false, force = false) => {
+    if (!force && !shouldAutoScrollRef.current) return;
+    if (!messagesEndRef.current) return;
+    
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: immediate ? 'auto' : 'smooth' 
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+
+      const nearBottom = isNearBottom();
+      setShowScrollButton(!nearBottom);
+      shouldAutoScrollRef.current = nearBottom;
+
+      scrollTimeoutRef.current = setTimeout(() => {
+        scrollTimeoutRef.current = null;
+      }, 150);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [isNearBottom]);
+
   useEffect(() => {
     if (prevChatIdRef.current !== currentChatId) {
       prevChatIdRef.current = currentChatId;
-      lastMessageContentRef.current = ''; // 重置内容引用
+      lastMessageContentRef.current = '';
+      shouldAutoScrollRef.current = true;
+      setShowScrollButton(false);
+      
       if (messages.length > 0) {
         const lastMessage = messages[messages.length - 1];
         lastMessageContentRef.current = lastMessage?.content || '';
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-        }, 100);
+        setTimeout(() => scrollToBottom(true), 100);
       }
     }
-  }, [currentChatId, messages.length]);
+  }, [currentChatId, messages.length, scrollToBottom]);
 
-  // AI 输出内容时自动滚动
   useEffect(() => {
-    if (messages.length === 0) return;
+    if (messages.length === 0 || !shouldAutoScrollRef.current) return;
     
     const lastMessage = messages[messages.length - 1];
     const currentContent = lastMessage?.content || '';
     
-    // 检测内容变化（AI 正在输出）
     if (currentContent !== lastMessageContentRef.current) {
       lastMessageContentRef.current = currentContent;
-      
-      // 使用 requestAnimationFrame 确保 DOM 更新后再滚动
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        });
-      });
+      scrollToBottom();
     }
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
-  // 加载状态变化时也滚动
   useEffect(() => {
-    if (loading && messages.length > 0) {
-      requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      });
+    if (loading && messages.length > 0 && shouldAutoScrollRef.current) {
+      scrollToBottom();
     }
-  }, [loading, messages.length]);
+  }, [loading, messages.length, scrollToBottom]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
 
-    let chatId = currentChatId;
-    if (!chatId) {
-      const newChat = createNewChat();
-      chatId = newChat.id;
-    }
-
+    const chatId = currentChatId || createNewChat().id;
     const userMessage = { 
       id: crypto.randomUUID(),
       role: 'user', 
@@ -106,20 +142,17 @@ export default function App() {
     updateChat(chatId, messagesWithAI);
     setInput('');
     setLoading(true);
-    
-    // 发送消息后立即滚动
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    });
+    shouldAutoScrollRef.current = true;
+    setShowScrollButton(false);
+    scrollToBottom(true);
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
-
     let accumulatedContent = '';
 
     try {
       await sendChatMessage(
-        newMessages.map((msg) => ({ role: msg.role, content: msg.content })),
+        newMessages.map(({ role, content }) => ({ role, content })),
         (content) => {
           accumulatedContent += content;
           const updatedMessages = [...messagesWithAI];
@@ -143,11 +176,11 @@ export default function App() {
       );
       setLoading(false);
       abortControllerRef.current = null;
-    } catch (error) {
+    } catch {
       setLoading(false);
       abortControllerRef.current = null;
     }
-  }, [input, loading, currentChatId, messages, createNewChat, updateChat]);
+  }, [input, loading, currentChatId, messages, createNewChat, updateChat, scrollToBottom]);
 
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
@@ -174,6 +207,12 @@ export default function App() {
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen(prev => !prev);
   }, []);
+
+  const handleScrollToBottom = useCallback(() => {
+    shouldAutoScrollRef.current = true;
+    scrollToBottom(true, true);
+    setShowScrollButton(false);
+  }, [scrollToBottom]);
 
   return (
     <div className="app">
@@ -208,14 +247,37 @@ export default function App() {
             <div ref={messagesEndRef} className="messages-end-spacer" />
           </div>
         </div>
-        <ChatInput
-          value={input}
-          onChange={setInput}
-          onSend={handleSend}
-          onStop={handleStop}
-          disabled={loading}
-          loading={loading}
-        />
+        <div className="input-wrapper-container">
+          {showScrollButton && (
+            <button
+              className="scroll-to-bottom-button"
+              onClick={handleScrollToBottom}
+              aria-label="滚动到底部"
+              title="滚动到底部"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+          <ChatInput
+            value={input}
+            onChange={setInput}
+            onSend={handleSend}
+            onStop={handleStop}
+            disabled={loading}
+            loading={loading}
+          />
+        </div>
       </div>
     </div>
   );
